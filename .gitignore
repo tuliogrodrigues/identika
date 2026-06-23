@@ -1,0 +1,24 @@
+# Clojure/JVM dependencies cache
+.cpcache/
+**/.cpcache/
+
+# LSP and Kondo caches
+.lsp/
+**/.lsp/
+.clj-kondo/.cache/
+**/.clj-kondo/.cache/
+**/.clj-kondo/
+
+# Sisyphus/other tools
+.sisyphus/
+**/.sisyphus/
+
+# Backup and temp files
+*~
+.*~
+*.swp
+*.swo
+
+# Output directory for builds/releases
+target/
+classes/
