@@ -1,5 +1,6 @@
 (ns identika.ulid-test
   (:require [clojure.test :refer :all]
+            [clojure.string :as str]
             [identika.ulid :as ulid]))
 
 ;; ──────────────────────────────────────────────
@@ -27,11 +28,6 @@
         (let [u (ulid/gen)]
           (is (every? valid-chars u) (str "Invalid chars in " u))))))
 
-  (testing "Consecutive ULIDs are unique"
-    (let [ids (repeatedly 1000 ulid/gen)]
-      (is (= (count ids) (count (distinct ids)))
-          "All 1000 generated ULIDs should be unique")))
-
   (testing "ULIDs are lexicographically sortable by time"
     (let [a (ulid/gen)
           _ (Thread/sleep 2)
@@ -48,5 +44,34 @@
     (let [timestamp 1781290640998
           ulid (ulid/gen timestamp)]
       (is (= timestamp
-             (ulid/time ulid)))))
+             (ulid/timestamp ulid)))))
+
+    (testing "Consecutive ULIDs are unique"
+    (let [ids (repeatedly 1000 ulid/gen)]
+      (is (= (count ids) (count (distinct ids)))
+          "All 1000 generated ULIDs should be unique")))
   )
+
+(deftest test-ulid-validation
+  (testing "Empty string is not a valid ULID"
+    (is (not (ulid/valid? ""))
+        "ULID cannot be empty"))
+
+  (testing "ULID cannot contains"
+    (testing "More than 26 valid characters"
+      (let [valid-ulid "01KVWFN1PF8N3GTDD2J98P3GXK"]
+        (is (and (ulid/valid? valid-ulid)
+                 (not (ulid/valid? (str/join [valid-ulid "A"])))))))
+
+    (testing "Less than 26 valid characters"
+      (let [valid-ulid "01KVWFN1PF8N3GTDD2J98P3GXK"]
+        (is (and (ulid/valid? valid-ulid)
+                 (not (ulid/valid? (subs valid-ulid 1)))))))
+
+    (testing "Dubious characters as I L O U"
+      (let [invalid-ulid "0IKVWFN1PF8N3GTDD2J98P3GXK"]
+        (is (not (ulid/valid? invalid-ulid)))))
+
+    (testing "Cannot have special characters"
+      (let [invalid-ulid "01KVWFN1PF8N3GTDD2J98P3GX&"]
+        (is (not (ulid/valid? invalid-ulid)))))))

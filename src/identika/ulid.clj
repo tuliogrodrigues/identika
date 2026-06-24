@@ -74,11 +74,11 @@
   {:added "0.0.1"}
   [ulid]
   (cond
-    (not= (count ulid) 26) {:error "ULID invalid length"}
-    (not-every? (apply hash-set encoding-chars) ulid) {:error "ULID contains invalid characters"}
-    :else {:success ulid}))
+    (not= (count ulid) 26) (do (println "ULID invalid length") false)
+    (not-every? (apply hash-set encoding-chars) ulid) (do (println "ULID contains invalid characters") false)
+    :else true))
 
-(defn time
+(defn timestamp
   "Extract the timestamp from a ULID string as a java.time.Instant."
   {:added "0.0.1"}
   [ulid]
@@ -96,10 +96,10 @@
   "Encode a 16-byte byte array into a ULID string."
   {:added "1.0"}
   [byte-arr]
-
+  ;; TODO: implement
   )
 
-(defn next
+(defn next-ulid
   "Return the next ULID in lexicographic sort order after `ulid-str`.
   Increments the random component, carrying into the timestamp if overflow."
   {:added "1.0"}
