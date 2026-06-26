@@ -75,3 +75,46 @@
     (testing "Cannot have special characters"
       (let [invalid-ulid "01KVWFN1PF8N3GTDD2J98P3GX&"]
         (is (not (ulid/valid? invalid-ulid)))))))
+
+;; ──────────────────────────────────────────────
+;; bytes->ulid
+;; ──────────────────────────────────────────────
+
+(deftest test-bytes->ulid-roundtrip
+  (testing "Round-trip: bytes->ulid of to-bytes result yields original ULID"
+    (dotimes [_ 20]
+      (let [ulid-str (ulid/gen)
+            bi (ulid/to-bytes ulid-str)
+            raw (.toByteArray bi)
+            n (count raw)
+            ;; Convert BigInteger to exactly 16 bytes big-endian.
+            ;; toByteArray strips leading zero bytes;
+            ;; if bit 127 is set it prepends a 0x00 sign byte (17 bytes total).
+            ba16 (byte-array 16)]
+        (if (> n 16)
+          (System/arraycopy raw 1 ba16 0 16)  ;; drop the sign byte
+          (System/arraycopy raw 0 ba16 (- 16 n) n))  ;; pad on the left
+        (is (= ulid-str (ulid/bytes->ulid ba16)))))))
+
+(deftest test-bytes->ulid-all-zeros
+  (testing "All-zero byte array encodes to all-zero ULID"
+    (let [zeros (byte-array 16 (repeat 0))]
+      (is (= "00000000000000000000000000" (ulid/bytes->ulid zeros))))))
+
+(deftest test-bytes->ulid-known-value
+  (testing "A generated ULID encodes back correctly given its 16-bit byte array"
+    (let [ulid-str "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+          bi (ulid/to-bytes ulid-str)
+          raw (.toByteArray bi)
+          n (count raw)
+          ba16 (byte-array 16)]
+      (if (> n 16)
+        (System/arraycopy raw 1 ba16 0 16)
+        (System/arraycopy raw 0 ba16 (- 16 n) n))
+      (is (= ulid-str (ulid/bytes->ulid ba16))))))
+
+(deftest test-bytes->ulid-26-chars
+  (testing "bytes->ulid always returns a 26-character string"
+    (dotimes [_ 10]
+      (let [ba (byte-array 16 (repeatedly #(rand-int 256)))]
+        (is (= 26 (count (ulid/bytes->ulid ba))))))))

@@ -49,25 +49,31 @@
           (concat (ulid-timestamp->bytes timestamp)
                   (ulid-entropy->bytes))))
 
+(defn- bigint->crockford
+  "Encode a BigInteger into a 26-character Crockford Base32 ULID string."
+  [^java.math.BigInteger v]
+  (let [sb (StringBuilder. 26)]
+    (loop [n 25]
+      (if (neg? n)
+        (.toString sb)
+        (let [idx (.intValue (.and (.shiftRight v (* n 5))
+                                    (BigInteger/valueOf 0x1F)))]
+          (.append sb (get encoding-chars idx))
+          (recur (dec n)))))))
+
+(defn- ulid-decode
+  "Decode a 26-character Crockford Base32 ULID string into its BigInteger representation."
+  [ulid]
+  (reduce #(.or (.shiftLeft ^java.math.BigInteger %1 5)
+                (biginteger (get encoding-map %2)))
+          BigInteger/ZERO
+          ulid))
+
 ;; ──────────────────────────────────────────────
 ;; ULID Interface
 ;; ──────────────────────────────────────────────
 
-(defn gen
-  "Generate a new ULID string.
-  Returns a 26-character Crockford Base32 encoded ULID."
-  {:added "0.0.1"}
-  ([] (gen (System/currentTimeMillis)))
-  ([^long timestamp ]
-   (let [acc (ulid-bytes timestamp)
-         sb (StringBuilder. 26)]
-         (loop [n 25, ^java.math.BigInteger v acc]
-           (if (neg? n)
-             (.toString sb)
-             (let [idx (.intValue (.and (.shiftRight v (* n 5))
-                                        (BigInteger/valueOf 0x1F)))]
-               (.append sb (get encoding-chars idx))
-               (recur (dec n) v)))))))
+
 
 (defn valid?
   "Return true if is a valid ULID string (26-char Crockford Base32)."
@@ -86,18 +92,25 @@
        (crockford-millis ulid)))
 
 (defn to-bytes
-  "Decode a ULID string into its raw 16-byte representation."
+  "Decode a ULID string into its BigInteger representation."
   {:added "0.0.1"}
   [ulid]
-  (and (valid? ulid)
-       (ulid-bytes ulid)))
+  (when (valid? ulid)
+    (ulid-decode ulid)))
 
 (defn bytes->ulid
   "Encode a 16-byte byte array into a ULID string."
   {:added "1.0"}
   [byte-arr]
-  ;; TODO: implement
-  )
+  (bigint->crockford (BigInteger. 1 byte-arr)))
+
+(defn gen
+  "Generate a new ULID string.
+  Returns a 26-character Crockford Base32 encoded ULID."
+  {:added "0.0.1"}
+  ([] (gen (System/currentTimeMillis)))
+  ([^long timestamp ]
+   (bigint->crockford (ulid-bytes timestamp))))
 
 (defn next-ulid
   "Return the next ULID in lexicographic sort order after `ulid-str`.
