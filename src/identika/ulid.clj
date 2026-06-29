@@ -114,11 +114,12 @@
 
 (defn next-ulid
   "Return the next ULID in lexicographic sort order after `ulid-str`.
-  Increments the random component, carrying into the timestamp if overflow."
+  Increments the random component, carrying into the timestamp if overflow.
+  Returns nil if `ulid-str` is not a valid ULID."
   {:added "1.0"}
   [ulid-str]
-  ;; TODO: implement
-  )
+  (when-let [bi (to-bytes ulid-str)]
+    (bigint->crockford (.add bi BigInteger/ONE))))
 
 (defn monotonic
   "Generate a monotonically increasing ULID using an explicit state atom.

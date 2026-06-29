@@ -118,3 +118,63 @@
     (dotimes [_ 10]
       (let [ba (byte-array 16 (repeatedly #(rand-int 256)))]
         (is (= 26 (count (ulid/bytes->ulid ba))))))))
+
+;; ──────────────────────────────────────────────
+;; next-ulid
+;; ──────────────────────────────────────────────
+
+(deftest test-next-ulid-basic
+  (testing "next-ulid is lexicographically greater than the original"
+    (dotimes [_ 20]
+      (let [ulid (ulid/gen)]
+        (is (pos? (compare (ulid/next-ulid ulid) ulid))))))
+
+  (testing "next-ulid returns a 26-character string"
+    (dotimes [_ 10]
+      (let [ulid (ulid/gen)]
+        (is (= 26 (count (ulid/next-ulid ulid)))))))
+
+  (testing "next-ulid returns nil for invalid input"
+    (is (nil? (ulid/next-ulid "")))
+    (is (nil? (ulid/next-ulid "not-a-ulid")))
+    (is (nil? (ulid/next-ulid "01KVWFN1PF8N3GTDD2J98P3GX&")))))
+
+(deftest test-next-ulid-chained
+  (testing "Chained next-ulid calls produce strictly increasing values"
+    (let [start "00000000000000000000000000"
+          ids (take 50 (iterate ulid/next-ulid start))]
+      (is (every? neg? (map compare ids (rest ids))))
+      (is (apply not= ids)))))
+
+(deftest test-next-ulid-lowest
+  (testing "next-ulid of all-zero ULID is 00000000000000000000000001"
+    (is (= "00000000000000000000000001"
+           (ulid/next-ulid "00000000000000000000000000"))))
+
+  (testing "next-ulid of ...00001 is ...00002"
+    (is (= "00000000000000000000000002"
+           (ulid/next-ulid "00000000000000000000000001"))))
+
+  (testing "next-ulid of ...0000V (V=27) is ...0000W (W=28)"
+    (is (= "0000000000000000000000000W"
+           (ulid/next-ulid "0000000000000000000000000V"))))
+
+  (testing "next-ulid of ...0000Z (Z=31) carries into ...00010"
+    (is (= "00000000000000000000000010"
+           (ulid/next-ulid "0000000000000000000000000Z")))))
+
+(deftest test-next-ulid-carry
+  (testing "next-ulid carries into the next character when lower bits overflow"
+    ;; Construct a ULID with all 1s in the lower 80 bits to force carry.
+    ;; 'Z' = 31 = 0b11111 (max Crockford Base32 value), so 16 Z's fills
+    ;; the random component with all 1s, forcing overflow into the timestamp.
+    (let [base "0000000000"
+          rand-all-zs (apply str (repeat 16 \Z))
+          maxed (str base rand-all-zs)
+          nexted (ulid/next-ulid maxed)]
+      (is (not (nil? nexted)))
+      (is (= 26 (count nexted)))
+      (is (pos? (compare nexted maxed)))
+      ;; Carry propagates through all 16 random chars into char 9 (last timestamp char)
+      (is (= \1 (nth nexted 9)))
+      (is (every? #{\0} (subs nexted 10))))))
