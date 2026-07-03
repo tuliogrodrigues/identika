@@ -126,12 +126,21 @@
 
   Usage:
     (def gen (atom nil))
-    (identika.core/monotonic-ulid gen)  ;; returns ULID with guaranteed increasing order
+    (identika.ulid/monotonic gen)  ;; returns ULID with guaranteed increasing order
 
-  The atom holds the last generated ULID bytes. If the next call falls within
+  The atom holds the last generated ULID string. If the next call falls within
   the same millisecond, the random component is incremented. If the timestamp
   advances, a fresh ULID is generated."
   {:added "1.0"}
   [generator-atom]
-  ;; TODO: implement
-  )
+  (let [ts (System/currentTimeMillis)
+        prev @generator-atom]
+    (if (and prev (= ts (timestamp prev)))
+      ;; Same millisecond: increment the previous ULID
+      (let [next (next-ulid prev)]
+        (reset! generator-atom next)
+        next)
+      ;; Different millisecond or first call: generate fresh
+      (let [ulid (gen ts)]
+        (reset! generator-atom ulid)
+        ulid))))

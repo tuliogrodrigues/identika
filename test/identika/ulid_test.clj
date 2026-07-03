@@ -80,7 +80,27 @@
 ;; bytes->ulid
 ;; ──────────────────────────────────────────────
 
-(deftest test-bytes->ulid-roundtrip
+(deftest test-bytes->ulid
+  (testing "All-zero byte array encodes to all-zero ULID"
+    (let [zeros (byte-array 16 (repeat 0))]
+      (is (= "00000000000000000000000000" (ulid/bytes->ulid zeros)))))
+
+  (testing "bytes->ulid always returns a 26-character string"
+    (dotimes [_ 10]
+      (let [ba (byte-array 16 (repeatedly #(rand-int 256)))]
+        (is (= 26 (count (ulid/bytes->ulid ba)))))))
+
+  (testing "A generated ULID encodes back correctly given its 16-bit byte array"
+    (let [ulid-str "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+          bi (ulid/to-bytes ulid-str)
+          raw (.toByteArray bi)
+          n (count raw)
+          ba16 (byte-array 16)]
+      (if (> n 16)
+        (System/arraycopy raw 1 ba16 0 16)
+        (System/arraycopy raw 0 ba16 (- 16 n) n))
+      (is (= ulid-str (ulid/bytes->ulid ba16)))))
+
   (testing "Round-trip: bytes->ulid of to-bytes result yields original ULID"
     (dotimes [_ 20]
       (let [ulid-str (ulid/gen)
@@ -96,34 +116,11 @@
           (System/arraycopy raw 0 ba16 (- 16 n) n))  ;; pad on the left
         (is (= ulid-str (ulid/bytes->ulid ba16)))))))
 
-(deftest test-bytes->ulid-all-zeros
-  (testing "All-zero byte array encodes to all-zero ULID"
-    (let [zeros (byte-array 16 (repeat 0))]
-      (is (= "00000000000000000000000000" (ulid/bytes->ulid zeros))))))
-
-(deftest test-bytes->ulid-known-value
-  (testing "A generated ULID encodes back correctly given its 16-bit byte array"
-    (let [ulid-str "01ARZ3NDEKTSV4RRFFQ69G5FAV"
-          bi (ulid/to-bytes ulid-str)
-          raw (.toByteArray bi)
-          n (count raw)
-          ba16 (byte-array 16)]
-      (if (> n 16)
-        (System/arraycopy raw 1 ba16 0 16)
-        (System/arraycopy raw 0 ba16 (- 16 n) n))
-      (is (= ulid-str (ulid/bytes->ulid ba16))))))
-
-(deftest test-bytes->ulid-26-chars
-  (testing "bytes->ulid always returns a 26-character string"
-    (dotimes [_ 10]
-      (let [ba (byte-array 16 (repeatedly #(rand-int 256)))]
-        (is (= 26 (count (ulid/bytes->ulid ba))))))))
-
 ;; ──────────────────────────────────────────────
 ;; next-ulid
 ;; ──────────────────────────────────────────────
 
-(deftest test-next-ulid-basic
+(deftest test-next-ulid
   (testing "next-ulid is lexicographically greater than the original"
     (dotimes [_ 20]
       (let [ulid (ulid/gen)]
@@ -137,16 +134,8 @@
   (testing "next-ulid returns nil for invalid input"
     (is (nil? (ulid/next-ulid "")))
     (is (nil? (ulid/next-ulid "not-a-ulid")))
-    (is (nil? (ulid/next-ulid "01KVWFN1PF8N3GTDD2J98P3GX&")))))
+    (is (nil? (ulid/next-ulid "01KVWFN1PF8N3GTDD2J98P3GX&"))))
 
-(deftest test-next-ulid-chained
-  (testing "Chained next-ulid calls produce strictly increasing values"
-    (let [start "00000000000000000000000000"
-          ids (take 50 (iterate ulid/next-ulid start))]
-      (is (every? neg? (map compare ids (rest ids))))
-      (is (apply not= ids)))))
-
-(deftest test-next-ulid-lowest
   (testing "next-ulid of all-zero ULID is 00000000000000000000000001"
     (is (= "00000000000000000000000001"
            (ulid/next-ulid "00000000000000000000000000"))))
@@ -161,9 +150,14 @@
 
   (testing "next-ulid of ...0000Z (Z=31) carries into ...00010"
     (is (= "00000000000000000000000010"
-           (ulid/next-ulid "0000000000000000000000000Z")))))
+           (ulid/next-ulid "0000000000000000000000000Z"))))
 
-(deftest test-next-ulid-carry
+  (testing "Chained next-ulid calls produce strictly increasing values"
+    (let [start "00000000000000000000000000"
+          ids (take 50 (iterate ulid/next-ulid start))]
+      (is (every? neg? (map compare ids (rest ids))))
+      (is (apply not= ids))))
+
   (testing "next-ulid carries into the next character when lower bits overflow"
     ;; Construct a ULID with all 1s in the lower 80 bits to force carry.
     ;; 'Z' = 31 = 0b11111 (max Crockford Base32 value), so 16 Z's fills
@@ -178,3 +172,35 @@
       ;; Carry propagates through all 16 random chars into char 9 (last timestamp char)
       (is (= \1 (nth nexted 9)))
       (is (every? #{\0} (subs nexted 10))))))
+
+;; ──────────────────────────────────────────────
+;; monotonic
+;; ──────────────────────────────────────────────
+
+(deftest test-monotonic-ulid
+  (testing "monotonic returns a 26-character string"
+    (let [gen (atom nil)]
+      (dotimes [_ 10]
+        (is (= 26 (count (ulid/monotonic gen)))))))
+
+  (testing "monotonic updates the atom after each call"
+    (let [gen (atom nil)
+          ulid1 (ulid/monotonic gen)]
+      (is (= ulid1 @gen))
+      (let [ulid2 (ulid/monotonic gen)]
+        (is (= ulid2 @gen))
+        (is (not= ulid1 ulid2)))))
+
+  (testing "monotonic returns strictly increasing values"
+    (let [gen (atom nil)
+          ids (repeatedly 100 #(ulid/monotonic gen))]
+      (is (every? neg? (map compare ids (rest ids))))
+      (is (= 100 (count (distinct ids))))))
+
+  (testing "Two independent atoms produce independent sequences"
+    (let [a (atom nil)
+          b (atom nil)
+          as (repeatedly 20 #(ulid/monotonic a))
+          bs (repeatedly 20 #(ulid/monotonic b))]
+      (is (every? neg? (map compare as (rest as))))
+      (is (every? neg? (map compare bs (rest bs)))))))
