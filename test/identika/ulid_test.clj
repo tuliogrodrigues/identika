@@ -77,34 +77,34 @@
         (is (not (ulid/valid? invalid-ulid)))))))
 
 ;; ──────────────────────────────────────────────
-;; bytes->ulid
+;; encode / decode
 ;; ──────────────────────────────────────────────
 
-(deftest test-bytes->ulid
+(deftest test-encode
   (testing "All-zero byte array encodes to all-zero ULID"
     (let [zeros (byte-array 16 (repeat 0))]
-      (is (= "00000000000000000000000000" (ulid/bytes->ulid zeros)))))
+      (is (= "00000000000000000000000000" (ulid/encode zeros)))))
 
-  (testing "bytes->ulid always returns a 26-character string"
+  (testing "encode always returns a 26-character string"
     (dotimes [_ 10]
       (let [ba (byte-array 16 (repeatedly #(rand-int 256)))]
-        (is (= 26 (count (ulid/bytes->ulid ba)))))))
+        (is (= 26 (count (ulid/encode ba)))))))
 
-  (testing "A generated ULID encodes back correctly given its 16-bit byte array"
+  (testing "A generated ULID decodes and encodes back correctly"
     (let [ulid-str "01ARZ3NDEKTSV4RRFFQ69G5FAV"
-          bi (ulid/to-bytes ulid-str)
+          bi (ulid/decode ulid-str)
           raw (.toByteArray bi)
           n (count raw)
           ba16 (byte-array 16)]
       (if (> n 16)
         (System/arraycopy raw 1 ba16 0 16)
         (System/arraycopy raw 0 ba16 (- 16 n) n))
-      (is (= ulid-str (ulid/bytes->ulid ba16)))))
+      (is (= ulid-str (ulid/encode ba16)))))
 
-  (testing "Round-trip: bytes->ulid of to-bytes result yields original ULID"
+  (testing "Round-trip: encode of decode result yields original ULID"
     (dotimes [_ 20]
       (let [ulid-str (ulid/gen)
-            bi (ulid/to-bytes ulid-str)
+            bi (ulid/decode ulid-str)
             raw (.toByteArray bi)
             n (count raw)
             ;; Convert BigInteger to exactly 16 bytes big-endian.
@@ -114,7 +114,7 @@
         (if (> n 16)
           (System/arraycopy raw 1 ba16 0 16)  ;; drop the sign byte
           (System/arraycopy raw 0 ba16 (- 16 n) n))  ;; pad on the left
-        (is (= ulid-str (ulid/bytes->ulid ba16)))))))
+        (is (= ulid-str (ulid/encode ba16)))))))
 
 ;; ──────────────────────────────────────────────
 ;; next-ulid

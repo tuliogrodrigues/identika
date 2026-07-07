@@ -24,8 +24,7 @@
     (identika/get-timestamp :ulid \"01ARZ3NDEKTSV4RRFFQ69G5FAV\")
     ;; => 1781290640998"
   (:require [identika.ulid :as ulid]
-            [identika.uuid :as uuid])
-  (:import [java.math BigInteger]))
+            [identika.uuid :as uuid]))
 
 ;; ──────────────────────────────────────────────
 ;; Protocols
@@ -47,12 +46,12 @@
   (valid?
     [this id-str]
     "Returns true if id-str is a valid identifier for this strategy.")
-  (to-bytes
+  (decode
     [this id-str]
     "Decode an identifier string into its BigInteger representation.")
-  (bytes->id
+  (encode
     [this byte-arr]
-    "Encode a 16-byte array back into an identifier string."))
+    "Encode a byte array back into an identifier string."))
 
 (defprotocol TimeSortable
   "Mixin protocol for ID types that embed timestamps.
@@ -81,8 +80,8 @@
 
 (def ^:private ^:no-doc -prot-generate generate)
 (def ^:private ^:no-doc -prot-valid? valid?)
-(def ^:private ^:no-doc -prot-to-bytes to-bytes)
-(def ^:private ^:no-doc -prot-bytes->id bytes->id)
+(def ^:private ^:no-doc -prot-decode decode)
+(def ^:private ^:no-doc -prot-encode encode)
 (def ^:private ^:no-doc -prot-timestamp timestamp)
 (def ^:private ^:no-doc -prot-next-id next-id)
 (def ^:private ^:no-doc -prot-monotonic-gen monotonic-gen)
@@ -95,8 +94,8 @@
   IdGenerator
   (generate [this opts] (uuid/gen))
   (valid? [this id-str] (uuid/valid? id-str))
-  (to-bytes [this id-str] (uuid/to-bytes id-str))
-  (bytes->id [this byte-arr] (uuid/bytes->id byte-arr)))
+  (decode [this id-str] (uuid/decode id-str))
+  (encode [this byte-arr] (uuid/encode byte-arr)))
 
 ;; ──────────────────────────────────────────────
 ;; ULID Generator
@@ -110,10 +109,10 @@
                 (System/currentTimeMillis))))
   (valid? [this id-str]
     (ulid/valid? id-str))
-  (to-bytes [this id-str]
-    (ulid/to-bytes id-str))
-  (bytes->id [this byte-arr]
-    (ulid/bytes->ulid byte-arr))
+  (decode [this id-str]
+    (ulid/decode id-str))
+  (encode [this byte-arr]
+    (ulid/encode byte-arr))
 
   TimeSortable
   (timestamp [this id-str]
@@ -200,29 +199,29 @@
   ([strategy-or-gen id-str]
    (-prot-valid? (resolve-generator strategy-or-gen) id-str)))
 
-(defn to-bytes
+(defn decode
   "Decode an identifier string into its BigInteger representation.
 
   With one argument, uses the default (:uuid) strategy.
 
-    (to-bytes \"550e8400-e29b-41d4-a716-446655440000\")
-    (to-bytes :ulid \"01ARZ3NDEKTSV4RRFFQ69G5FAV\")"
+    (decode \"550e8400-e29b-41d4-a716-446655440000\")
+    (decode :ulid \"01ARZ3NDEKTSV4RRFFQ69G5FAV\")"
   ([id-str]
-   (-prot-to-bytes (generator) id-str))
+   (-prot-decode (generator) id-str))
   ([strategy-or-gen id-str]
-   (-prot-to-bytes (resolve-generator strategy-or-gen) id-str)))
+   (-prot-decode (resolve-generator strategy-or-gen) id-str)))
 
-(defn bytes->id
+(defn encode
   "Encode a byte array into an identifier string.
 
   With one argument, uses the default (:uuid) strategy.
 
-    (bytes->id byte-arr)
-    (bytes->id :ulid byte-arr)"
+    (encode byte-arr)
+    (encode :ulid byte-arr)"
   ([byte-arr]
-   (-prot-bytes->id (generator) byte-arr))
+   (-prot-encode (generator) byte-arr))
   ([strategy-or-gen byte-arr]
-   (-prot-bytes->id (resolve-generator strategy-or-gen) byte-arr)))
+   (-prot-encode (resolve-generator strategy-or-gen) byte-arr)))
 
 (defn get-timestamp
   "Extract the millisecond epoch timestamp from a time-sortable identifier.

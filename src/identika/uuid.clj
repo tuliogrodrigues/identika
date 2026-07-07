@@ -6,8 +6,7 @@
   - 122 bits of randomness, version 4 (0100), variant 1 (10xx)
   - Pure Clojure, zero dependencies beyond java.security.SecureRandom"
   (:import [java.security SecureRandom]
-           [java.math BigInteger]
-           [java.util UUID]))
+           [java.math BigInteger]))
 
 (defonce ^:private uuid-rng (SecureRandom.))
 
@@ -75,21 +74,21 @@
   [^String s]
   (boolean (re-matches uuid-v4-re (.toLowerCase (str s)))))
 
-(defn to-bytes
+(defn decode
   "Decode a UUID v4 string into its BigInteger representation.
   Returns nil if s is not a valid UUID.
 
-    (to-bytes \"550e8400-e29b-41d4-a716-446655440000\")
+    (decode \"550e8400-e29b-41d4-a716-446655440000\")
     ;; => 2347923874092379847239847923874923874"
   {:added "0.1.0"}
   [^String s]
   (when (valid? s)
     (hex-str->bigint s)))
 
-(defn bytes->id
+(defn encode
   "Encode a 16-byte byte array into a UUID v4 string.
 
-    (bytes->id (byte-array 16 (range 16)))
+    (encode (byte-array 16 (range 16)))
     ;; => \"00010203-0405-0607-0809-0a0b0c0d0e0f\""
   {:added "0.1.0"}
   [^bytes byte-arr]

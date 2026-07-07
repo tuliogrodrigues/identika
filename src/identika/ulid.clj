@@ -91,16 +91,16 @@
   (and (valid? ulid)
        (crockford-millis ulid)))
 
-(defn to-bytes
+(defn decode
   "Decode a ULID string into its BigInteger representation."
-  {:added "0.0.1"}
+  {:added "0.1.0"}
   [ulid]
   (when (valid? ulid)
     (ulid-decode ulid)))
 
-(defn bytes->ulid
+(defn encode
   "Encode a 16-byte byte array into a ULID string."
-  {:added "1.0"}
+  {:added "0.1.0"}
   [byte-arr]
   (bigint->crockford (BigInteger. 1 byte-arr)))
 
@@ -118,7 +118,7 @@
   Returns nil if `ulid-str` is not a valid ULID."
   {:added "1.0"}
   [ulid-str]
-  (when-let [bi (to-bytes ulid-str)]
+  (when-let [bi (decode ulid-str)]
     (bigint->crockford (.add bi BigInteger/ONE))))
 
 (defn monotonic

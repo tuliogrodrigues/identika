@@ -88,10 +88,10 @@
       (is (false? (identika/valid? g "not-a-uuid"))))))
 
 (deftest test-uuid-roundtrip
-  (testing "to-bytes and bytes->id round-trip"
+  (testing "decode and encode round-trip"
     (dotimes [_ 20]
       (let [uid (identika/generate :uuid)
-            bi  (identika/to-bytes :uuid uid)
+            bi  (identika/decode :uuid uid)
             raw (.toByteArray bi)
             n   (count raw)
             ba16 (byte-array 16)]
@@ -99,7 +99,7 @@
         (if (> n 16)
           (System/arraycopy raw 1 ba16 0 16)
           (System/arraycopy raw 0 ba16 (- 16 n) n))
-        (is (= uid (identika/bytes->id :uuid ba16)))))))
+        (is (= uid (identika/encode :uuid ba16)))))))
 
 ;; ──────────────────────────────────────────────
 ;; ULID generation and validation
