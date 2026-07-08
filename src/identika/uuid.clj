@@ -5,6 +5,7 @@
   - 36-char hex-hyphenated string (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
   - 122 bits of randomness, version 4 (0100), variant 1 (10xx)
   - Pure Clojure, zero dependencies beyond java.security.SecureRandom"
+  (:require [identika.protocols :as pct])
   (:import [java.security SecureRandom]
            [java.math BigInteger]))
 
@@ -74,16 +75,28 @@
   [^String s]
   (boolean (re-matches uuid-v4-re (.toLowerCase (str s)))))
 
+(defn- bigint->bytes-16
+  "Convert a BigInteger (0 to 2^128 - 1) to a 16-byte big-endian byte array."
+  [^java.math.BigInteger bi]
+  (let [ba (.toByteArray bi)
+        n (count ba)]
+    (cond
+      (= n 16) ba
+      (= n 17) (java.util.Arrays/copyOfRange ba 1 17)
+      :else    (let [result (byte-array 16)]
+                 (System/arraycopy ba 0 result (- 16 n) n)
+                 result))))
+
 (defn decode
-  "Decode a UUID v4 string into its BigInteger representation.
+  "Decode a UUID v4 string into a 16-byte byte array.
   Returns nil if s is not a valid UUID.
 
     (decode \"550e8400-e29b-41d4-a716-446655440000\")
-    ;; => 2347923874092379847239847923874923874"
+    ;; => #object[\"[B\" 0x...]"
   {:added "0.1.0"}
   [^String s]
   (when (valid? s)
-    (hex-str->bigint s)))
+    (bigint->bytes-16 (hex-str->bigint s))))
 
 (defn encode
   "Encode a 16-byte byte array into a UUID v4 string.
@@ -92,4 +105,15 @@
     ;; => \"00010203-0405-0607-0809-0a0b0c0d0e0f\""
   {:added "0.1.0"}
   [^bytes byte-arr]
+  (let [n (count byte-arr)]
+    (when-not (= n 16)
+      (throw (IllegalArgumentException.
+               (str "UUID byte array must be exactly 16 bytes, got " n)))))
   (bytes->hex-str byte-arr))
+
+(defrecord UUIDGenerator []
+  pct/IdGenerator
+  (generate [this opts] (gen))
+  (valid? [this id-str] (valid? id-str))
+  (decode [this id-str] (decode id-str))
+  (encode [this byte-arr] (encode byte-arr)))

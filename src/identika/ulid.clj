@@ -6,6 +6,8 @@
   - 48-bit timestamp (millisecond Unix epoch) + 80-bit random component
   - Lexicographically sortable
   - Monotonic generation within same millisecond"
+  (:require [identika.protocols :as pct]
+            [identika.protocols :as ptc])
   (:import [java.security SecureRandom]))
 
 (defonce ^:private randomizer (SecureRandom.))
@@ -69,6 +71,20 @@
           BigInteger/ZERO
           ulid))
 
+(defn- bigint->bytes-16
+  "Convert a BigInteger (0 to 2^128 - 1) to a 16-byte big-endian byte array.
+  java.math.BigInteger/toByteArray may return fewer than 16 bytes (sign-trimmed)
+  or 17 bytes (sign bit), so this normalises to exactly 16."
+  [^java.math.BigInteger bi]
+  (let [ba (.toByteArray bi)
+        n (count ba)]
+    (cond
+      (= n 16) ba
+      (= n 17) (java.util.Arrays/copyOfRange ba 1 17)
+      :else    (let [result (byte-array 16)]
+                 (System/arraycopy ba 0 result (- 16 n) n)
+                 result))))
+
 ;; ──────────────────────────────────────────────
 ;; ULID Interface
 ;; ──────────────────────────────────────────────
@@ -88,20 +104,24 @@
   "Extract the timestamp from a ULID string as a java.time.Instant."
   {:added "0.0.1"}
   [ulid]
-  (and (valid? ulid)
-       (crockford-millis ulid)))
+  (when (valid? ulid)
+    (crockford-millis ulid)))
 
 (defn decode
-  "Decode a ULID string into its BigInteger representation."
+  "Decode a ULID string into a 16-byte byte array."
   {:added "0.1.0"}
   [ulid]
   (when (valid? ulid)
-    (ulid-decode ulid)))
+    (bigint->bytes-16 (ulid-decode ulid))))
 
 (defn encode
   "Encode a 16-byte byte array into a ULID string."
   {:added "0.1.0"}
   [byte-arr]
+  (let [n (count byte-arr)]
+    (when-not (= n 16)
+      (throw (IllegalArgumentException.
+               (str "ULID byte array must be exactly 16 bytes, got " n)))))
   (bigint->crockford (BigInteger. 1 byte-arr)))
 
 (defn gen
@@ -118,8 +138,8 @@
   Returns nil if `ulid-str` is not a valid ULID."
   {:added "1.0"}
   [ulid-str]
-  (when-let [bi (decode ulid-str)]
-    (bigint->crockford (.add bi BigInteger/ONE))))
+  (when (valid? ulid-str)
+    (bigint->crockford (.add (ulid-decode ulid-str) BigInteger/ONE))))
 
 (defn monotonic
   "Generate a monotonically increasing ULID using an explicit state atom.
@@ -144,3 +164,27 @@
       (let [ulid (gen ts)]
         (reset! generator-atom ulid)
         ulid))))
+
+
+(defrecord ULIDGenerator []
+  ptc/IdGenerator
+  (generate [this opts]
+    (gen (if opts
+                (:timestamp opts (System/currentTimeMillis))
+                (System/currentTimeMillis))))
+  (valid? [this id-str]
+    (valid? id-str))
+  (decode [this id-str]
+    (decode id-str))
+  (encode [this byte-arr]
+    (encode byte-arr))
+
+  ptc/TimeSortable
+  (timestamp [this id-str]
+    (timestamp id-str))
+
+  ptc/MonotonicId
+  (next-id [this id-str]
+    (next-ulid id-str))
+  (monotonic-gen [this state-atom]
+    (monotonic state-atom)))
