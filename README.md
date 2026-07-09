@@ -4,14 +4,14 @@
 
 ---
 
-Identika provides a collection of modern unique identifier strategies under a single, unified namespace. Designed for database primary keys, distributed tracing, log collation, and client-safe obfuscation — using idiomatic Clojure without pulling in heavy transitive dependencies.
+Identika provides a collection of modern unique identifier strategies, each in its own self-contained namespace. Designed for database primary keys, distributed tracing, log collation, and client-safe obfuscation — using idiomatic Clojure without pulling in heavy transitive dependencies.
 
 ## Key Features
 
 - **Zero Transitive Dependencies** — Built using pure Clojure (`org.clojure/clojure`) and standard JDK classes (`java.security.SecureRandom`, etc.).
-- **Consistent, Idiomatic API** — Every strategy follows the same patterns via Clojure protocols.
+- **Self-Contained Namespaces** — Each strategy is independent. Import only what you need.
 - **Thread-Safe** — All entropy sources use `SecureRandom` and are shared across calls.
-- **Unified Toolkit** — Single namespace for ULID, UUID v4, and future strategies (NanoID, KSUID, etc.).
+- **Pluggable** — Future strategies (NanoID, KSUID, UUIDv7) ship as their own namespaces with no shared machinery.
 
 ---
 
@@ -45,62 +45,48 @@ com.identika/identika {:mvn/version "0.1.0"}
 ### Quick Start
 
 ```clojure
-(require '[identika.core :as identika])
+(require '[identika.uuid :as uuid]
+         '[identika.ulid :as ulid])
 
-;; Generate a UUID v4 (default strategy)
-(identika/generate)
+;; Generate a UUID v4
+(uuid/gen)
 ;; => "550e8400-e29b-41d4-a716-446655440000"
 
 ;; Generate a ULID
-(identika/generate :ulid)
+(ulid/gen)
 ;; => "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 ```
-
-### Polymorphic API via Multimethods
-
-The `identika.core` namespace uses Clojure multimethods dispatched on strategy keywords (`:uuid`, `:ulid`). Every function accepts a strategy keyword as its first argument to select the format.
 
 ---
 
 ### UUID v4 (RFC 4122)
 
-UUID v4 is the **default strategy**. Generates 36-character hex-hyphenated strings with proper version (0100) and variant (10xx) bits.
+Generates 36-character hex-hyphenated strings with proper version (0100) and variant (10xx) bits.
 
 ```clojure
-(require '[identika.core :as identika])
+(require '[identika.uuid :as uuid])
 
 ;; Generate
-(identika/generate :uuid)
+(uuid/gen)
 ;; => "550e8400-e29b-41d4-a716-446655440000"
 
 ;; Validate
-(identika/valid? :uuid "550e8400-e29b-41d4-a716-446655440000")
+(uuid/valid? "550e8400-e29b-41d4-a716-446655440000")
 ;; => true
 
-(identika/valid? :uuid "not-a-uuid")
+(uuid/valid? "not-a-uuid")
 ;; => false
 
 ;; Decode a UUID string into a 16-byte array
-(identika/decode :uuid "550e8400-e29b-41d4-a716-446655440000")
+(uuid/decode "550e8400-e29b-41d4-a716-446655440000")
 ;; => #object["[B" ...]
 
 ;; Encode a 16-byte array back into a UUID string
-(identika/encode :uuid (byte-array 16 (range 16)))
+(uuid/encode (byte-array 16 (range 16)))
 ;; => "00010203-0405-0607-0809-0a0b0c0d0e0f"
 ```
 
-UUID v4 is **not** time-sortable and does **not** support monotonic operations:
-
-```clojure
-(identika/get-timestamp :uuid (identika/generate :uuid))
-;; => nil  (UUID v4 has no embedded timestamp)
-
-(identika/next-id :uuid (identika/generate :uuid))
-;; => nil
-
-(identika/monotonic-gen :uuid (atom nil))
-;; => nil
-```
+UUID v4 is **not** time-sortable and does **not** support monotonic operations. The namespace only includes `gen`, `valid?`, `decode`, and `encode`.
 
 ---
 
@@ -114,14 +100,14 @@ ULIDs are 128-bit identifiers consisting of:
 #### Generation
 
 ```clojure
-(require '[identika.core :as identika])
+(require '[identika.ulid :as ulid])
 
 ;; Generate using current system time
-(identika/generate :ulid)
+(ulid/gen)
 ;; => "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 
 ;; Generate with a specific timestamp (millisecond epoch)
-(identika/generate :ulid {:timestamp 1781290640998})
+(ulid/gen 1781290640998)
 ;; => "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 ```
 
@@ -129,10 +115,10 @@ ULIDs are 128-bit identifiers consisting of:
 
 ```clojure
 ;; Validate a ULID string
-(identika/valid? :ulid "01ARZ3NDEKTSV4RRFFQ69G5FAV")
+(ulid/valid? "01ARZ3NDEKTSV4RRFFQ69G5FAV")
 ;; => true
 
-(identika/valid? :ulid "invalid-ulid!")
+(ulid/valid? "invalid-ulid!")
 ;; => false
 ```
 
@@ -140,11 +126,11 @@ ULIDs are 128-bit identifiers consisting of:
 
 ```clojure
 ;; Extract the millisecond timestamp
-(identika/get-timestamp :ulid "01ARZ3NDEKTSV4RRFFQ69G5FAV")
+(ulid/timestamp "01ARZ3NDEKTSV4RRFFQ69G5FAV")
 ;; => 1781290640998
 
-;; Non-time-sortable strategies return nil
-(identika/get-timestamp :uuid (identika/generate :uuid))
+;; Returns nil for invalid ULIDs
+(ulid/timestamp "not-a-ulid")
 ;; => nil
 ```
 
@@ -154,11 +140,11 @@ ULIDs are 128-bit identifiers consisting of:
 
 ```clojure
 ;; Decode a ULID string into a 16-byte array
-(identika/decode :ulid "01ARZ3NDEKTSV4RRFFQ69G5FAV")
+(ulid/decode "01ARZ3NDEKTSV4RRFFQ69G5FAV")
 ;; => #object["[B" ...]
 
 ;; Encode a 16-byte array back into a ULID string
-(identika/encode :ulid (identika/decode :ulid "01ARZ3NDEKTSV4RRFFQ69G5FAV"))
+(ulid/encode (ulid/decode "01ARZ3NDEKTSV4RRFFQ69G5FAV"))
 ;; => "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 ```
 
@@ -166,54 +152,24 @@ ULIDs are 128-bit identifiers consisting of:
 
 ```clojure
 ;; Get the next lexicographical ULID (increments random component)
-(identika/next-id :ulid "01ARZ3NDEKTSV4RRFFQ69G5FAV")
+(ulid/next-ulid "01ARZ3NDEKTSV4RRFFQ69G5FAV")
 ;; => "01ARZ3NDEKTSV4RRFFQ69G5FAW"
 
 ;; Monotonic generation via state atom
 (def ulid-state (atom nil))
-(identika/monotonic-gen :ulid ulid-state)
+(ulid/monotonic ulid-state)
 ;; => "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 
 ;; Next call within same millisecond increments instead of re-rolling entropy
-(identika/monotonic-gen :ulid ulid-state)
+(ulid/monotonic ulid-state)
 ;; => "01ARZ3NDEKTSV4RRFFQ69G5FAW"
-```
-
-#### Raw Namespace
-
-You can also use the `identika.ulid` namespace directly:
-
-```clojure
-(require '[identika.ulid :as ulid])
-
-(ulid/gen)                        ;; Generate ULID string
-(ulid/valid? "01ARZ3ND...")       ;; Validate
-(ulid/timestamp "01ARZ3ND...")    ;; Extract timestamp
-(ulid/decode "01ARZ3ND...")       ;; String → 16-byte array
-(ulid/encode byte-arr)            ;; 16-byte array → string
-(ulid/next-ulid "01ARZ3ND...")    ;; Next lexicographic ULID
-(ulid/monotonic (atom nil))       ;; Monotonic generation
 ```
 
 ---
 
 ## API Reference
 
-### `identika.core` (public API)
-
-All functions are multimethods dispatched on a **strategy keyword** (`:uuid`, `:ulid`).
-
-| Function | Description |
-| :--- | :--- |
-| `(generate)` / `(generate strategy opts?)` | Generate an ID string (default: `:uuid`). `opts` may include `:timestamp` |
-| `(valid? strategy id-str)` | Check if `id-str` is valid for the given strategy |
-| `(encode strategy byte-arr)` | Encode a 16-byte array into an ID string |
-| `(decode strategy id-str)` | Decode an ID string into a 16-byte byte array |
-| `(get-timestamp strategy id-str)` | Extract millisecond timestamp (ULID only; returns `nil` for UUID) |
-| `(next-id strategy id-str)` | Return the next ID in sort order (ULID only; returns `nil` for UUID) |
-| `(monotonic-gen strategy state-atom)` | Generate monotonically increasing IDs (ULID only; returns `nil` for UUID) |
-
-### `identika.ulid` (direct ULID namespace)
+### `identika.ulid`
 
 | Function | Description |
 | :--- | :--- |
@@ -225,7 +181,7 @@ All functions are multimethods dispatched on a **strategy keyword** (`:uuid`, `:
 | `(next-ulid s)` | Next lexicographic ULID; `nil` if invalid |
 | `(monotonic state-atom)` | Monotonically increasing ULIDs via state atom |
 
-### `identika.uuid` (direct UUID namespace)
+### `identika.uuid`
 
 | Function | Description |
 | :--- | :--- |

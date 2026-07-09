@@ -109,5 +109,3 @@
       (throw (IllegalArgumentException.
                (str "UUID byte array must be exactly 16 bytes, got " n)))))
   (bytes->hex-str byte-arr))
-
-

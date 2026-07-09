@@ -16,14 +16,6 @@
 (defonce ^:private encoding-map
   (zipmap encoding-chars (range 32)))
 
-#_(def ^:private decoding-map
-  (let [m (java.util.HashMap.)
-        s encoding-chars]
-    (doseq [i (range (count s))]
-      (.put m (long (nth s i)) (byte i))
-      (.put m (long (Character/toLowerCase ^char (nth s i))) (byte i)))
-    m))
-
 (defn- ulid-timestamp->bytes [timestamp]
     (for [shift (range 40 -1 -8)]
       (-> (bit-shift-right timestamp shift)
@@ -86,8 +78,6 @@
 ;; ──────────────────────────────────────────────
 ;; ULID Interface
 ;; ──────────────────────────────────────────────
-
-
 
 (defn valid?
   "Return true if is a valid ULID string (26-char Crockford Base32)."
@@ -162,5 +152,3 @@
       (let [ulid (gen ts)]
         (reset! generator-atom ulid)
         ulid))))
-
-
