@@ -6,8 +6,6 @@
   - 48-bit timestamp (millisecond Unix epoch) + 80-bit random component
   - Lexicographically sortable
   - Monotonic generation within same millisecond"
-  (:require [identika.protocols :as pct]
-            [identika.protocols :as ptc])
   (:import [java.security SecureRandom]))
 
 (defonce ^:private randomizer (SecureRandom.))
@@ -166,25 +164,3 @@
         ulid))))
 
 
-(defrecord ULIDGenerator []
-  ptc/IdGenerator
-  (generate [this opts]
-    (gen (if opts
-                (:timestamp opts (System/currentTimeMillis))
-                (System/currentTimeMillis))))
-  (valid? [this id-str]
-    (valid? id-str))
-  (decode [this id-str]
-    (decode id-str))
-  (encode [this byte-arr]
-    (encode byte-arr))
-
-  ptc/TimeSortable
-  (timestamp [this id-str]
-    (timestamp id-str))
-
-  ptc/MonotonicId
-  (next-id [this id-str]
-    (next-ulid id-str))
-  (monotonic-gen [this state-atom]
-    (monotonic state-atom)))

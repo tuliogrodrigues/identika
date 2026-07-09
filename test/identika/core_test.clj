@@ -1,62 +1,53 @@
 (ns identika.core-test
   (:require [clojure.test :refer :all]
-            [identika.core :as identika]
-            [identika.protocols :as proto]))
+            [identika.core :as identika]))
 
 ;; ──────────────────────────────────────────────
-;; Factory & protocol contracts
+;; Core API: generate
 ;; ──────────────────────────────────────────────
-;; Each generator is created ONCE; all protocol satisfactions and factory
-;; behaviors are asserted together so we don't instantiate redundant objects.
 
-(deftest test-generator-factory
-  (testing "Default (no args) creates UUID — IdGenerator only"
-    (let [g (identika/generator)]
-      (is (satisfies? proto/IdGenerator g))
-      (is (not (satisfies? proto/TimeSortable g)))
-      (is (not (satisfies? proto/MonotonicId g)))))
+(deftest test-generate
+  (testing "generate with no args returns UUID v4 string"
+    (let [id (identika/generate)]
+      (is (string? id))
+      (is (= 36 (count id)))))
 
-  (testing ":uuid creates UUID — IdGenerator only"
-    (let [g (identika/generator :uuid)]
-      (is (satisfies? proto/IdGenerator g))
-      (is (not (satisfies? proto/TimeSortable g)))
-      (is (not (satisfies? proto/MonotonicId g)))))
+  (testing "generate :uuid returns UUID v4 string"
+    (let [id (identika/generate :uuid)]
+      (is (string? id))
+      (is (= 36 (count id)))))
 
-  (testing ":ulid creates ULID — all three protocols"
-    (let [g (identika/generator :ulid)]
-      (is (satisfies? proto/IdGenerator g))
-      (is (satisfies? proto/TimeSortable g))
-      (is (satisfies? proto/MonotonicId g))))
+  (testing "generate :ulid returns ULID string"
+    (let [id (identika/generate :ulid)]
+      (is (string? id))
+      (is (= 26 (count id)))))
 
   (testing "Unknown strategy throws"
     (is (thrown? IllegalArgumentException
-                 (identika/generator :nanoid)))))
+                 (identika/generate :nanoid)))))
 
 ;; ──────────────────────────────────────────────
-;; Polymorphic dispatch (keyword vs record)
+;; Core API: valid?
 ;; ──────────────────────────────────────────────
 
-(deftest test-polyglot-dispatch
-  (testing "generate via keyword or protocol dispatch"
-    (let [uuid-str (identika/generate :uuid)
-          ulid-str (identika/generate :ulid)
-          uuid-gen (identika/generator :uuid)
-          ulid-gen (identika/generator :ulid)]
-      (is (string? (proto/generate uuid-gen nil)))
-      (is (string? (proto/generate ulid-gen nil)))
-      (is (= 36 (count uuid-str)))
-      (is (= 26 (count ulid-str)))))
+(deftest test-valid
+  (testing "valid? on valid IDs"
+    (is (true? (identika/valid? :uuid (identika/generate :uuid))))
+    (is (true? (identika/valid? :ulid (identika/generate :ulid)))))
 
-  (testing "valid? via keyword or protocol dispatch"
-    (let [u (identika/generate :uuid)]
-      (is (true? (identika/valid? :uuid u)))
-      (is (true? (proto/valid? (identika/generator :uuid) u))))))
+  (testing "valid? on invalid IDs"
+    (is (false? (identika/valid? :uuid "not-a-uuid")))
+    (is (false? (identika/valid? :ulid "not-a-ulid"))))
+
+  (testing "Unknown strategy throws"
+    (is (thrown? IllegalArgumentException
+                 (identika/valid? :nanoid "anything")))))
 
 ;; ──────────────────────────────────────────────
-;; Delegation to unsupported protocols
+;; Delegation to unsupported operations
 ;; ──────────────────────────────────────────────
 
-(deftest test-unsupported-protocols
+(deftest test-unsupported-operations
   (testing "get-timestamp returns nil for non-time-sortable strategies"
     (is (nil? (identika/get-timestamp :uuid (identika/generate :uuid)))))
 
@@ -64,4 +55,16 @@
     (is (nil? (identika/next-id :uuid (identika/generate :uuid)))))
 
   (testing "monotonic-gen returns nil for non-monotonic strategies"
-    (is (nil? (identika/monotonic-gen :uuid (atom nil))))))
+    (is (nil? (identika/monotonic-gen :uuid (atom nil)))))
+
+  (testing "Unknown strategy throws for all operation multimethods"
+    (is (thrown? IllegalArgumentException
+                 (identika/get-timestamp :nanoid "x")))
+    (is (thrown? IllegalArgumentException
+                 (identika/next-id :nanoid "x")))
+    (is (thrown? IllegalArgumentException
+                 (identika/monotonic-gen :nanoid (atom nil))))
+    (is (thrown? IllegalArgumentException
+                 (identika/encode :nanoid (byte-array 16))))
+    (is (thrown? IllegalArgumentException
+                 (identika/decode :nanoid "x")))))
