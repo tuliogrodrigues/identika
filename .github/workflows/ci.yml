@@ -17,7 +17,7 @@ jobs:
       image: clojure:tools-deps-trixie-slim
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Lint with clj-kondo
         run: clojure -M:lint
 
@@ -28,6 +28,6 @@ jobs:
       image: clojure:tools-deps-trixie-slim
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Run tests
         run: clojure -M:test/unit
