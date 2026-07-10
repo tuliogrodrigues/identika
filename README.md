@@ -192,6 +192,78 @@ ULIDs are 128-bit identifiers consisting of:
 
 ---
 
+## Building & Deploying
+
+### Build the JAR
+
+```bash
+clojure -T:build jar
+```
+
+Produces `target/identika-<version>.jar`. Version defaults to `0.2.0` and can be overridden with the `PROJECT_VERSION` environment variable:
+
+```bash
+PROJECT_VERSION=1.0.0 clojure -T:build jar
+```
+
+### Install Locally
+
+```bash
+clojure -T:build install
+```
+
+This installs the jar to your local `~/.m2/repository` so other projects on your machine can depend on it.
+
+### Deploy to Clojars
+
+1. Install [Maven](https://maven.apache.org/install.html)
+2. Configure credentials in `~/.m2/settings.xml`:
+
+```xml
+<settings>
+  <servers>
+    <server>
+      <id>clojars</id>
+      <username>${CLOJARS_USERNAME}</username>
+      <password>${CLOJARS_PASSWORD}</password>
+    </server>
+  </servers>
+</settings>
+```
+
+3. Build the jar and deploy:
+
+```bash
+clojure -T:build jar
+
+mvn deploy:deploy-file \
+  -Dfile=target/identika-<version>.jar \
+  -DpomFile=target/classes/META-INF/maven/com.tgr/identika/pom.xml \
+  -DrepositoryId=clojars \
+  -Durl=https://clojars.org/repo
+```
+
+### Deploy to Maven Central
+
+Requires GPG signing and a Sonatype account. After building:
+
+```bash
+mvn deploy:deploy-file \
+  -Dfile=target/identika-<version>.jar \
+  -DpomFile=target/classes/META-INF/maven/com.tgr/identika/pom.xml \
+  -DrepositoryId=sonatype \
+  -Durl=https://oss.sonatype.org/service/local/staging/deploy/maven2/ \
+  -Dgpg.sign=true
+```
+
+### Clean Build Artifacts
+
+```bash
+clojure -T:build clean
+```
+
+---
+
 ## Development & Testing
 
 ### Running Tests
