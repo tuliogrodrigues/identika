@@ -8,22 +8,18 @@
 ;; ──────────────────────────────────────────────
 
 (deftest test-ulid-generation
-  (testing "ULID returns a string"
+  (testing "returns a string"
     (is (string? (ulid/gen))))
 
-  (testing "ULID returns a random string"
-    (is (not= (ulid/gen)
-              (ulid/gen))))
+  (testing "returns a different string on each call"
+    (is (not= (ulid/gen) (ulid/gen))))
 
- (testing "ULID returns a 26-character string"
-    (is (= 26 (count (ulid/gen))))
+  (testing "returns a 26-character string"
     (dotimes [_ 10]
       (is (= 26 (count (ulid/gen))))))
 
-  (testing "ULID contains only Crockford Base32 characters"
-    (let [valid-chars #{\0 \1 \2 \3 \4 \5 \6 \7 \8 \9
-                        \A \B \C \D \E \F \G \H \J \K
-                        \L \M \N \P \Q \R \S \T \V \W \X \Y \Z}]
+  (testing "contains only Crockford Base32 characters"
+    (let [valid-chars (set "0123456789ABCDEFGHJKMNPQRSTVWXYZ")]
       (dotimes [_ 10]
         (let [u (ulid/gen)]
           (is (every? valid-chars u) (str "Invalid chars in " u))))))
@@ -35,86 +31,132 @@
       (is (neg? (compare a b))
           (str "Earlier ULID " a " should sort before later " b))))
 
-  (testing "ULIDs generate at same time are unique"
+  (testing "ULIDs with the same timestamp are unique"
     (let [ids (repeatedly 1000 #(ulid/gen 1781290640998))]
       (is (= (count ids) (count (distinct ids)))
           "All 1000 generated ULIDs should be unique")))
 
-  (testing "ULIDS generate at an specific time should not change that time"
-    (let [timestamp 1781290640998
-          ulid (ulid/gen timestamp)]
-      (is (= timestamp
-             (ulid/timestamp ulid)))))
+  (testing "ULID generated at a specific time preserves that timestamp"
+    (let [ts   1781290640998
+          ulid (ulid/gen ts)]
+      (is (= ts (ulid/timestamp ulid)))))
 
-    (testing "Consecutive ULIDs are unique"
+  (testing "Consecutive ULIDs are unique"
     (let [ids (repeatedly 1000 ulid/gen)]
       (is (= (count ids) (count (distinct ids)))
-          "All 1000 generated ULIDs should be unique")))
-  )
+          "All 1000 generated ULIDs should be unique"))))
+
+;; ──────────────────────────────────────────────
+;; ULID validation
+;; ──────────────────────────────────────────────
 
 (deftest test-ulid-validation
-  (testing "Empty string is not a valid ULID"
-    (is (not (ulid/valid? ""))
-        "ULID cannot be empty"))
+  (testing "a valid generated ULID passes validation"
+    (dotimes [_ 10]
+      (is (ulid/valid? (ulid/gen)))))
 
-  (testing "ULID cannot contains"
-    (testing "More than 26 valid characters"
-      (let [valid-ulid "01KVWFN1PF8N3GTDD2J98P3GXK"]
-        (is (and (ulid/valid? valid-ulid)
-                 (not (ulid/valid? (str/join [valid-ulid "A"])))))))
+  (testing "empty string is rejected"
+    (is (not (ulid/valid? ""))))
 
-    (testing "Less than 26 valid characters"
-      (let [valid-ulid "01KVWFN1PF8N3GTDD2J98P3GXK"]
-        (is (and (ulid/valid? valid-ulid)
-                 (not (ulid/valid? (subs valid-ulid 1)))))))
+  (testing "too-long string is rejected"
+    (let [valid-ulid "01KVWFN1PF8N3GTDD2J98P3GXK"]
+      (is (ulid/valid? valid-ulid))
+      (is (not (ulid/valid? (str valid-ulid "A"))))))
 
-    (testing "Dubious characters as I L O U"
-      (let [invalid-ulid "0IKVWFN1PF8N3GTDD2J98P3GXK"]
-        (is (not (ulid/valid? invalid-ulid)))))
+  (testing "too-short string is rejected"
+    (let [valid-ulid "01KVWFN1PF8N3GTDD2J98P3GXK"]
+      (is (ulid/valid? valid-ulid))
+      (is (not (ulid/valid? (subs valid-ulid 1))))))
 
-    (testing "Cannot have special characters"
-      (let [invalid-ulid "01KVWFN1PF8N3GTDD2J98P3GX&"]
-        (is (not (ulid/valid? invalid-ulid)))))))
+  (testing "ambiguous characters (I, L, O, U) are rejected"
+    (are [ulid-str] (not (ulid/valid? ulid-str))
+      "0IKVWFN1PF8N3GTDD2J98P3GXK"   ;; I
+      "0LKVWFN1PF8N3GTDD2J98P3GXK"   ;; L
+      "0OKVWFN1PF8N3GTDD2J98P3GXK"   ;; O
+      "0UKVWFN1PF8N3GTDD2J98P3GXK")) ;; U
+
+  (testing "special characters are rejected"
+    (are [ulid-str] (not (ulid/valid? ulid-str))
+      "01KVWFN1PF8N3GTDD2J98P3GX&"
+      "01KVWFN1PF8N3GTDD2J98P3GX@"
+      "01KVWFN1PF8N3GTDD2J98P3GX!"))
+
+  (testing "UUID strings are rejected (cross-format contamination)"
+    (let [uuid-str "550e8400-e29b-41d4-a716-446655440000"]
+      (is (not (ulid/valid? uuid-str))))))
 
 ;; ──────────────────────────────────────────────
-;; bytes->ulid
+;; Timestamp extraction
 ;; ──────────────────────────────────────────────
 
-(deftest test-bytes->ulid
-  (testing "All-zero byte array encodes to all-zero ULID"
-    (let [zeros (byte-array 16 (repeat 0))]
-      (is (= "00000000000000000000000000" (ulid/bytes->ulid zeros)))))
+(deftest test-ulid-timestamp
+  (testing "extracts the correct millisecond timestamp"
+    (let [ts   1781290640998
+          ulid (ulid/gen ts)]
+      (is (= ts (ulid/timestamp ulid)))))
 
-  (testing "bytes->ulid always returns a 26-character string"
+  (testing "extracts zero timestamp correctly"
+    (let [ulid (ulid/gen 0)]
+      (is (zero? (ulid/timestamp ulid)))))
+
+  (testing "returns nil for invalid ULID string"
+    (is (nil? (ulid/timestamp "")))
+    (is (nil? (ulid/timestamp "not-a-ulid")))))
+
+;; ──────────────────────────────────────────────
+;; encode / decode
+;; ──────────────────────────────────────────────
+
+(deftest test-encode
+  (testing "all-zero byte array encodes to all-zero ULID"
+    (let [zeros (byte-array 16)]
+      (is (= "00000000000000000000000000" (ulid/encode zeros)))))
+
+  (testing "encode always returns a 26-character string"
     (dotimes [_ 10]
       (let [ba (byte-array 16 (repeatedly #(rand-int 256)))]
-        (is (= 26 (count (ulid/bytes->ulid ba)))))))
+        (is (= 26 (count (ulid/encode ba)))))))
 
-  (testing "A generated ULID encodes back correctly given its 16-bit byte array"
-    (let [ulid-str "01ARZ3NDEKTSV4RRFFQ69G5FAV"
-          bi (ulid/to-bytes ulid-str)
-          raw (.toByteArray bi)
-          n (count raw)
-          ba16 (byte-array 16)]
-      (if (> n 16)
-        (System/arraycopy raw 1 ba16 0 16)
-        (System/arraycopy raw 0 ba16 (- 16 n) n))
-      (is (= ulid-str (ulid/bytes->ulid ba16)))))
+  (testing "encode with non-16-byte array throws"
+    (is (thrown? Exception (ulid/encode (byte-array 8))))
+    (is (thrown? Exception (ulid/encode (byte-array 32))))
+    (is (thrown? Exception (ulid/encode (byte-array 0))))))
 
-  (testing "Round-trip: bytes->ulid of to-bytes result yields original ULID"
+(deftest test-decode
+  (testing "decode returns a 16-byte byte array"
+    (let [ulid-str (ulid/gen)
+          ba (ulid/decode ulid-str)]
+      (is (instance? (Class/forName "[B") ba))
+      (is (= 16 (count ba)))))
+
+  (testing "decode returns nil for invalid input"
+    (is (nil? (ulid/decode "")))
+    (is (nil? (ulid/decode "not-a-ulid")))
+    (is (nil? (ulid/decode "01KVWFN1PF8N3GTDD2J98P3GX&"))))
+
+  (testing "decode returns nil for UUID strings"
+    (is (nil? (ulid/decode "550e8400-e29b-41d4-a716-446655440000")))))
+
+(deftest test-encode-decode-roundtrip
+  (testing "decode(known-ulid) then encode back yields the original"
+    (let [known "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+          ba    (ulid/decode known)]
+      (is (= known (ulid/encode ba)))))
+
+  (testing "round-trip for 20 random ULIDs"
     (dotimes [_ 20]
       (let [ulid-str (ulid/gen)
-            bi (ulid/to-bytes ulid-str)
-            raw (.toByteArray bi)
-            n (count raw)
-            ;; Convert BigInteger to exactly 16 bytes big-endian.
-            ;; toByteArray strips leading zero bytes;
-            ;; if bit 127 is set it prepends a 0x00 sign byte (17 bytes total).
-            ba16 (byte-array 16)]
-        (if (> n 16)
-          (System/arraycopy raw 1 ba16 0 16)  ;; drop the sign byte
-          (System/arraycopy raw 0 ba16 (- 16 n) n))  ;; pad on the left
-        (is (= ulid-str (ulid/bytes->ulid ba16)))))))
+            ba       (ulid/decode ulid-str)]
+        (is (= 16 (count ba)))
+        (is (= ulid-str (ulid/encode ba))))))
+
+  (testing "round-trip for 20 random byte arrays"
+    (dotimes [_ 20]
+      (let [ba       (byte-array 16 (repeatedly #(rand-int 256)))
+            ulid-str (ulid/encode ba)
+            decoded  (ulid/decode ulid-str)]
+        (is (= 26 (count ulid-str)))
+        (is (java.util.Arrays/equals ba decoded))))))
 
 ;; ──────────────────────────────────────────────
 ;; next-ulid
@@ -144,32 +186,28 @@
     (is (= "00000000000000000000000002"
            (ulid/next-ulid "00000000000000000000000001"))))
 
-  (testing "next-ulid of ...0000V (V=27) is ...0000W (W=28)"
+  (testing "next-ulid of ...0000V (V=27 decimal) is ...0000W (W=28)"
     (is (= "0000000000000000000000000W"
            (ulid/next-ulid "0000000000000000000000000V"))))
 
-  (testing "next-ulid of ...0000Z (Z=31) carries into ...00010"
+  (testing "next-ulid of ...0000Z (Z=31, max) carries into ...00010"
     (is (= "00000000000000000000000010"
            (ulid/next-ulid "0000000000000000000000000Z"))))
 
   (testing "Chained next-ulid calls produce strictly increasing values"
     (let [start "00000000000000000000000000"
-          ids (take 50 (iterate ulid/next-ulid start))]
+          ids   (take 50 (iterate ulid/next-ulid start))]
       (is (every? neg? (map compare ids (rest ids))))
       (is (apply not= ids))))
 
   (testing "next-ulid carries into the next character when lower bits overflow"
-    ;; Construct a ULID with all 1s in the lower 80 bits to force carry.
-    ;; 'Z' = 31 = 0b11111 (max Crockford Base32 value), so 16 Z's fills
-    ;; the random component with all 1s, forcing overflow into the timestamp.
-    (let [base "0000000000"
-          rand-all-zs (apply str (repeat 16 \Z))
-          maxed (str base rand-all-zs)
+    ;; 16 Z's (max Crockford Base32 = 31 = 0b11111) forces carry into timestamp
+    (let [base   "0000000000"
+          maxed  (str base (apply str (repeat 16 \Z)))
           nexted (ulid/next-ulid maxed)]
       (is (not (nil? nexted)))
       (is (= 26 (count nexted)))
       (is (pos? (compare nexted maxed)))
-      ;; Carry propagates through all 16 random chars into char 9 (last timestamp char)
       (is (= \1 (nth nexted 9)))
       (is (every? #{\0} (subs nexted 10))))))
 
@@ -178,28 +216,28 @@
 ;; ──────────────────────────────────────────────
 
 (deftest test-monotonic-ulid
-  (testing "monotonic returns a 26-character string"
-    (let [gen (atom nil)]
+  (testing "returns a 26-character string"
+    (let [state (atom nil)]
       (dotimes [_ 10]
-        (is (= 26 (count (ulid/monotonic gen)))))))
+        (is (= 26 (count (ulid/monotonic state)))))))
 
-  (testing "monotonic updates the atom after each call"
-    (let [gen (atom nil)
-          ulid1 (ulid/monotonic gen)]
-      (is (= ulid1 @gen))
-      (let [ulid2 (ulid/monotonic gen)]
-        (is (= ulid2 @gen))
+  (testing "updates the atom after each call"
+    (let [state (atom nil)
+          ulid1 (ulid/monotonic state)]
+      (is (= ulid1 @state))
+      (let [ulid2 (ulid/monotonic state)]
+        (is (= ulid2 @state))
         (is (not= ulid1 ulid2)))))
 
-  (testing "monotonic returns strictly increasing values"
-    (let [gen (atom nil)
-          ids (repeatedly 100 #(ulid/monotonic gen))]
+  (testing "returns strictly increasing values (100 calls)"
+    (let [state (atom nil)
+          ids   (repeatedly 100 #(ulid/monotonic state))]
       (is (every? neg? (map compare ids (rest ids))))
       (is (= 100 (count (distinct ids))))))
 
-  (testing "Two independent atoms produce independent sequences"
-    (let [a (atom nil)
-          b (atom nil)
+  (testing "two independent atoms produce independent sequences"
+    (let [a  (atom nil)
+          b  (atom nil)
           as (repeatedly 20 #(ulid/monotonic a))
           bs (repeatedly 20 #(ulid/monotonic b))]
       (is (every? neg? (map compare as (rest as))))
