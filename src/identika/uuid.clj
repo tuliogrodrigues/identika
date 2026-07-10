@@ -5,7 +5,6 @@
   - 36-char hex-hyphenated string (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
   - 122 bits of randomness, version 4 (0100), variant 1 (10xx)
   - Pure Clojure, zero dependencies beyond java.security.SecureRandom"
-  (:require [identika.protocols :as pct])
   (:import [java.security SecureRandom]
            [java.math BigInteger]))
 
@@ -110,10 +109,3 @@
       (throw (IllegalArgumentException.
                (str "UUID byte array must be exactly 16 bytes, got " n)))))
   (bytes->hex-str byte-arr))
-
-(defrecord UUIDGenerator []
-  pct/IdGenerator
-  (generate [this opts] (gen))
-  (valid? [this id-str] (valid? id-str))
-  (decode [this id-str] (decode id-str))
-  (encode [this byte-arr] (encode byte-arr)))

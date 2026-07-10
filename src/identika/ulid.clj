@@ -6,8 +6,6 @@
   - 48-bit timestamp (millisecond Unix epoch) + 80-bit random component
   - Lexicographically sortable
   - Monotonic generation within same millisecond"
-  (:require [identika.protocols :as pct]
-            [identika.protocols :as ptc])
   (:import [java.security SecureRandom]))
 
 (defonce ^:private randomizer (SecureRandom.))
@@ -17,14 +15,6 @@
 
 (defonce ^:private encoding-map
   (zipmap encoding-chars (range 32)))
-
-#_(def ^:private decoding-map
-  (let [m (java.util.HashMap.)
-        s encoding-chars]
-    (doseq [i (range (count s))]
-      (.put m (long (nth s i)) (byte i))
-      (.put m (long (Character/toLowerCase ^char (nth s i))) (byte i)))
-    m))
 
 (defn- ulid-timestamp->bytes [timestamp]
     (for [shift (range 40 -1 -8)]
@@ -88,8 +78,6 @@
 ;; ──────────────────────────────────────────────
 ;; ULID Interface
 ;; ──────────────────────────────────────────────
-
-
 
 (defn valid?
   "Return true if is a valid ULID string (26-char Crockford Base32)."
@@ -164,27 +152,3 @@
       (let [ulid (gen ts)]
         (reset! generator-atom ulid)
         ulid))))
-
-
-(defrecord ULIDGenerator []
-  ptc/IdGenerator
-  (generate [this opts]
-    (gen (if opts
-                (:timestamp opts (System/currentTimeMillis))
-                (System/currentTimeMillis))))
-  (valid? [this id-str]
-    (valid? id-str))
-  (decode [this id-str]
-    (decode id-str))
-  (encode [this byte-arr]
-    (encode byte-arr))
-
-  ptc/TimeSortable
-  (timestamp [this id-str]
-    (timestamp id-str))
-
-  ptc/MonotonicId
-  (next-id [this id-str]
-    (next-ulid id-str))
-  (monotonic-gen [this state-atom]
-    (monotonic state-atom)))
