@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    container:
+      image: clojure:tools-deps-trixie-slim
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Lint with clj-kondo
+        run: clojure -M:lint
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    container:
+      image: clojure:tools-deps-trixie-slim
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Run tests
+        run: clojure -M:test/unit
