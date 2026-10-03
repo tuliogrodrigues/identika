@@ -35,7 +35,7 @@ Identika provides a collection of modern unique identifier strategies, each in i
 Add Identika to your `deps.edn` dependencies:
 
 ```clojure
-com.identika/identika {:mvn/version "0.1.0"}
+org.clojars.rodriguesgot/identika {:mvn/version "0.2.0"}
 ```
 
 ---
@@ -325,32 +325,36 @@ This installs the jar to your local `~/.m2/repository` so other projects on your
 
 ### Deploy to Clojars
 
-1. Install [Maven](https://maven.apache.org/install.html)
-2. Configure credentials in `~/.m2/settings.xml`:
+Deploys use [`slipset/deps-deploy`](https://github.com/slipset/deps-deploy) directly from the build — no Maven required.
 
-```xml
-<settings>
-  <servers>
-    <server>
-      <id>clojars</id>
-      <username>${CLOJARS_USERNAME}</username>
-      <password>${CLOJARS_PASSWORD}</password>
-    </server>
-  </servers>
-</settings>
-```
-
-3. Build the jar and deploy:
+1. Create a [deploy token](https://clojars.org/tokens) on Clojars (account passwords are no longer accepted for deploys; copy the token value when it is shown — it is displayed only once).
+2. Export your Clojars username and the token, then run:
 
 ```bash
-clojure -T:build jar
-
-mvn deploy:deploy-file \
-  -Dfile=target/identika-<version>.jar \
-  -DpomFile=target/classes/META-INF/maven/com.tgr/identika/pom.xml \
-  -DrepositoryId=clojars \
-  -Durl=https://clojars.org/repo
+CLOJARS_USERNAME=<clojars-username> \
+CLOJARS_PASSWORD=<deploy-token> \
+clojure -T:build deploy
 ```
+
+This builds the jar and publishes it to `https://clojars.org/repo` under `org.clojars.rodriguesgot/identika`.
+
+> **Note:** the `org.clojars.<username>` group is verified automatically for your account, so no additional group setup is needed.
+
+### Release via GitHub Actions
+
+Pushing a tag that starts with `v` runs the [release workflow](.github/workflows/release.yml), which lints, tests, and deploys to Clojars using the version encoded in the tag:
+
+```bash
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+The workflow requires these repository secrets (Settings → Secrets and variables → Actions):
+
+| Secret | Value |
+| :--- | :--- |
+| `CLOJARS_USERNAME` | Your Clojars username |
+| `CLOJARS_PASSWORD` | A Clojars [deploy token](https://clojars.org/tokens) |
 
 ### Deploy to Maven Central
 
@@ -359,7 +363,7 @@ Requires GPG signing and a Sonatype account. After building:
 ```bash
 mvn deploy:deploy-file \
   -Dfile=target/identika-<version>.jar \
-  -DpomFile=target/classes/META-INF/maven/com.tgr/identika/pom.xml \
+  -DpomFile=target/classes/META-INF/maven/org.clojars.rodriguesgot/identika/pom.xml \
   -DrepositoryId=sonatype \
   -Durl=https://oss.sonatype.org/service/local/staging/deploy/maven2/ \
   -Dgpg.sign=true

@@ -23,6 +23,9 @@
 target/
 classes/
 
+# Transient pom written by deps-deploy during deploy
+/*.pom
+
 # EMACs temporary files
 *~
 *#*#
