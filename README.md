@@ -46,8 +46,8 @@ org.clojars.rodriguesgot/identika {:mvn/version "0.2.0"}
 
 ```clojure
 (require '[identika.uuid :as uuid]
-         '[identika.uuid7 :as uuid7]
-         '[identika.ulid :as ulid])
+		 '[identika.uuid7 :as uuid7]
+		 '[identika.ulid :as ulid])
 
 ;; Generate a UUID v4
 (uuid/gen)
@@ -300,101 +300,6 @@ ULIDs are 128-bit identifiers consisting of:
 | `(monotonic state-atom)` | Monotonically increasing UUIDv7s via state atom, incrementing the random payload within a millisecond |
 
 ---
-
-## Building & Deploying
-
-### Build the JAR
-
-```bash
-clojure -T:build jar
-```
-
-Produces `target/identika-<version>.jar`. Version defaults to `0.2.0` and can be overridden with the `PROJECT_VERSION` environment variable:
-
-```bash
-PROJECT_VERSION=1.0.0 clojure -T:build jar
-```
-
-### Install Locally
-
-```bash
-clojure -T:build install
-```
-
-This installs the jar to your local `~/.m2/repository` so other projects on your machine can depend on it.
-
-### Deploy to Clojars
-
-Deploys use [`slipset/deps-deploy`](https://github.com/slipset/deps-deploy) directly from the build — no Maven required.
-
-1. Create a [deploy token](https://clojars.org/tokens) on Clojars (account passwords are no longer accepted for deploys; copy the token value when it is shown — it is displayed only once).
-2. Export your Clojars username and the token, then run:
-
-```bash
-CLOJARS_USERNAME=<clojars-username> \
-CLOJARS_PASSWORD=<deploy-token> \
-clojure -T:build deploy
-```
-
-This builds the jar and publishes it to `https://clojars.org/repo` under `org.clojars.rodriguesgot/identika`.
-
-> **Note:** the `org.clojars.<username>` group is verified automatically for your account, so no additional group setup is needed.
-
-### Release via GitHub Actions
-
-Pushing a tag that starts with `v` runs the [release workflow](.github/workflows/release.yml), which lints, tests, and deploys to Clojars using the version encoded in the tag:
-
-```bash
-git tag v0.2.0
-git push origin v0.2.0
-```
-
-The workflow requires these repository secrets (Settings → Secrets and variables → Actions):
-
-| Secret | Value |
-| :--- | :--- |
-| `CLOJARS_USERNAME` | Your Clojars username |
-| `CLOJARS_PASSWORD` | A Clojars [deploy token](https://clojars.org/tokens) |
-
-### Deploy to Maven Central
-
-Requires GPG signing and a Sonatype account. After building:
-
-```bash
-mvn deploy:deploy-file \
-  -Dfile=target/identika-<version>.jar \
-  -DpomFile=target/classes/META-INF/maven/org.clojars.rodriguesgot/identika/pom.xml \
-  -DrepositoryId=sonatype \
-  -Durl=https://oss.sonatype.org/service/local/staging/deploy/maven2/ \
-  -Dgpg.sign=true
-```
-
-### Clean Build Artifacts
-
-```bash
-clojure -T:build clean
-```
-
----
-
-## Development & Testing
-
-### Running Tests
-
-Identika uses [Kaocha](https://github.com/lambdaisland/kaocha) for testing:
-
-```bash
-clojure -M:test/unit
-```
-
-### REPL Workflow
-
-```bash
-clojure -M:repl
-```
-
----
-
 ## Roadmap
 
 - [x] **UUID v4** — Generation, validation, encode/decode round-trip

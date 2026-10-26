@@ -31,3 +31,5 @@ classes/
 *#*#
 
 .nrepl-port
+
+docs/build_deploy.md
