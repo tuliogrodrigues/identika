@@ -19,6 +19,10 @@
   {:extra-deps {clj-kondo/clj-kondo {:mvn/version "2024.11.14"}}
    :main-opts ["-m" "clj-kondo.main" "--lint" "src"]}
 
+  :bench
+  {:extra-paths ["bench"]
+   :main-opts ["-m" "identika.bench"]}
+
   :build
   {:replace-paths ["."]
    :replace-deps {io.github.clojure/tools.build

@@ -421,6 +421,27 @@ Details worth knowing:
 | `(monotonic state-atom)` | Monotonically increasing KSUIDs via state atom, incrementing the payload within a second |
 
 ---
+
+## Benchmarks
+
+Identika includes a dependency-free benchmark harness comparing all four
+implemented formats across generation, validation, timestamp extraction,
+encode/decode, monotonic generation, and next-ID operations:
+
+```bash
+clojure -M:bench
+```
+
+Tune the run with `BENCH_ROUNDS` and `BENCH_TARGET_MS`:
+
+```bash
+BENCH_ROUNDS=9 BENCH_TARGET_MS=100 clojure -M:bench
+```
+
+See [docs/benchmarks.md](docs/benchmarks.md) for methodology and sample
+results.
+
+---
 ## Roadmap
 
 - [x] **UUID v4** — Generation, validation, encode/decode round-trip
