@@ -1,6 +1,6 @@
 # Identika
 
-**A lightweight, zero-dependency Clojure toolkit for generating and parsing unique identifiers (ULID, UUID v4, UUIDv7, and more).**
+**A lightweight, zero-dependency Clojure toolkit for generating and parsing unique identifiers (ULID, UUID v4, UUIDv7, KSUID, and more).**
 
 ---
 
@@ -11,7 +11,7 @@ Identika provides a collection of modern unique identifier strategies, each in i
 - **Zero Transitive Dependencies** — Built using pure Clojure (`org.clojure/clojure`) and standard JDK classes (`java.security.SecureRandom`, etc.).
 - **Self-Contained Namespaces** — Each strategy is independent. Import only what you need.
 - **Thread-Safe** — All entropy sources use `SecureRandom` and are shared across calls.
-- **Pluggable** — Every strategy ships as its own namespace with no shared machinery, so future formats (NanoID, KSUID, CUID2) add no weight to the ones you don't use.
+- **Pluggable** — Every strategy ships as its own namespace with no shared machinery, so future formats (NanoID, CUID2) add no weight to the ones you don't use.
 
 ---
 
@@ -22,7 +22,7 @@ Identika provides a collection of modern unique identifier strategies, each in i
 | **UUID v4** | **No** | 36 chars (hex-hyphens) / 16 bytes | RFC 4122 random UUID. Universal standard, widely supported. | ✅ Complete |
 | **ULID** | **Yes** | 26 chars (Crockford Base32) / 16 bytes | Millisecond-precision sorting, URL-safe, case-insensitive. Excellent for DB keys. | ✅ Complete |
 | **UUIDv7** | **Yes** | 36 chars (Hex-Hyphens) / 16 bytes | RFC 9562 time-ordered UUID. Seamless drop-in for traditional UUIDs. | ✅ Complete |
-| **KSUID** | **Yes** | 27 chars (Base62) / 20 bytes | 32-bit second-precision timestamp + 128-bit random payload. | ⏳ Planned |
+| **KSUID** | **Yes** | 27 chars (Base62) / 20 bytes | 32-bit second-precision timestamp + 128-bit random payload. Epoch-based, compact DB keys. | ✅ Complete |
 | **NanoID** | **No** | Customizable (default 21 chars) | Compact, highly secure, custom alphabets. Great for user-facing short IDs. | ⏳ Planned |
 | **CUID2** | **No** | Customizable (default 24 chars) | Secure, collision-resistant, horizontally-scalable IDs. | ⏳ Planned |
 | **HashID** | **No** | Variable based on input integer | Reversible obfuscation for auto-incrementing IDs. | ⏳ Planned |
@@ -47,7 +47,8 @@ org.clojars.rodriguesgot/identika {:mvn/version "0.2.0"}
 ```clojure
 (require '[identika.uuid :as uuid]
 		 '[identika.uuid7 :as uuid7]
-		 '[identika.ulid :as ulid])
+		 '[identika.ulid :as ulid]
+		 '[identika.ksuid :as ksuid])
 
 ;; Generate a UUID v4
 (uuid/gen)
@@ -60,6 +61,10 @@ org.clojars.rodriguesgot/identika {:mvn/version "0.2.0"}
 ;; Generate a ULID
 (ulid/gen)
 ;; => "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+
+;; Generate a KSUID
+(ksuid/gen)
+;; => "0ujtsYcgvSTl8PAuAdqWYSMnLOv"
 ```
 
 ---
@@ -265,6 +270,110 @@ ULIDs are 128-bit identifiers consisting of:
 
 ---
 
+### KSUID (K-Sortable Unique Identifier)
+
+KSUIDs are 20-byte identifiers encoded as 27-character Base62 strings. The layout is:
+
+- **32-bit timestamp** — seconds since the KSUID epoch (2014-05-13T16:53:20Z)
+- **128-bit random payload** — generated using `SecureRandom`
+
+Because the timestamp occupies the most significant bits, KSUIDs sort chronologically as plain strings. The canonical representation is always 27 characters, left-padded with `0` when necessary.
+
+#### Generation
+
+```clojure
+(require '[identika.ksuid :as ksuid])
+
+;; Generate using the current system time
+(ksuid/gen)
+;; => "0ujtsYcgvSTl8PAuAdqWYSMnLOv"
+
+;; Generate with a specific timestamp (Unix seconds)
+(ksuid/gen 1507608047)
+;; => "0ujtsXownSh4sCYyDHoVXYMCidr"
+
+;; Timestamps must fall between the KSUID epoch and the 32-bit limit
+(ksuid/gen 1399999999)
+;; => throws IllegalArgumentException
+
+(ksuid/gen 5694967296)
+;; => throws IllegalArgumentException
+```
+
+> **Note:** `gen` takes **seconds**, not milliseconds, because the KSUID timestamp field has second precision. The valid range is `1400000000` (2014-05-13T16:53:20Z) through `5694967295` (2150-06-19T23:21:35Z).
+
+#### Validation
+
+```clojure
+(ksuid/valid? "0ujtsYcgvSTl8PAuAdqWYSMnLOv")
+;; => true
+
+;; Rejects wrong lengths, invalid Base62 characters, and 160-bit overflow
+(ksuid/valid? "not-a-ksuid")
+;; => false
+
+(ksuid/valid? "aWgEPTl1tmebfsQzFP4bxwgy80W")
+;; => false
+```
+
+#### Timestamp Extraction
+
+```clojure
+;; Extract the Unix timestamp (seconds)
+(ksuid/timestamp "0ujtsYcgvSTl8PAuAdqWYSMnLOv")
+;; => 1507608047
+
+;; The all-zero KSUID reports the KSUID epoch
+(ksuid/timestamp "000000000000000000000000000")
+;; => 1400000000
+
+;; Returns nil for anything that is not a valid KSUID
+(ksuid/timestamp "not-a-ksuid")
+;; => nil
+```
+
+#### Encode / Decode (String ↔ byte[])
+
+```clojure
+;; Decode a KSUID string into a 20-byte array
+(ksuid/decode "0ujtsYcgvSTl8PAuAdqWYSMnLOv")
+;; => #object["[B" ...]
+
+;; Encode a 20-byte array back into a KSUID string
+(ksuid/encode (ksuid/decode "0ujtsYcgvSTl8PAuAdqWYSMnLOv"))
+;; => "0ujtsYcgvSTl8PAuAdqWYSMnLOv"
+
+;; The maximum KSUID is all 0xff bytes
+(ksuid/encode (byte-array 20 (repeat 0xff)))
+;; => "aWgEPTl1tmebfsQzFP4bxwgy80V"
+```
+
+#### Next & Monotonic
+
+```clojure
+;; Next KSUID in lexicographic order (increments the 160-bit value)
+(ksuid/next-ksuid "0ujtsYcgvSTl8PAuAdqWYSMnLOv")
+;; => "0ujtsYcgvSTl8PAuAdqWYSMnLOw"
+
+;; Monotonic generation via state atom
+(def ksuid-state (atom nil))
+(ksuid/monotonic ksuid-state)
+;; => "0ujtsYcgvSTl8PAuAdqWYSMnLOv"
+
+;; Next call within the same second increments instead of re-rolling entropy
+(ksuid/monotonic ksuid-state)
+;; => "0ujtsYcgvSTl8PAuAdqWYSMnLOw"
+```
+
+Details worth knowing:
+
+- The timestamp stores seconds since `1400000000`, so `timestamp` reports ordinary Unix seconds.
+- Base62 is case-sensitive: `A` and `a` are different digits. The canonical encoding is always 27 characters.
+- `next-ksuid` increments the full 160-bit value and returns `nil` at the absolute maximum KSUID.
+- `monotonic` keeps a dedicated atom per generator. When the wall clock jumps backwards, generation continues from the last timestamp rather than regressing.
+
+---
+
 ## API Reference
 
 ### `identika.ulid`
@@ -299,13 +408,25 @@ ULIDs are 128-bit identifiers consisting of:
 | `(encode byte-arr)` | Encode 16-byte array → UUIDv7 string; throws if not 16 bytes |
 | `(monotonic state-atom)` | Monotonically increasing UUIDv7s via state atom, incrementing the random payload within a millisecond |
 
+### `identika.ksuid`
+
+| Function | Description |
+| :--- | :--- |
+| `(gen)` / `(gen unix-seconds)` | Generate a KSUID at the current time, or at an explicit Unix timestamp in seconds; throws if outside the 32-bit KSUID range |
+| `(valid? s)` | Returns `true` if `s` is a canonical 27-char Base62 KSUID whose value fits in 160 bits |
+| `(timestamp s)` | Extract the Unix timestamp (seconds) from the leading 32 bits, or `nil` if invalid |
+| `(decode s)` | Decode KSUID string → 20-byte array; `nil` if invalid |
+| `(encode byte-arr)` | Encode 20-byte array → KSUID string; throws if not 20 bytes |
+| `(next-ksuid s)` | Next lexicographic KSUID; `nil` if invalid or at the maximum value |
+| `(monotonic state-atom)` | Monotonically increasing KSUIDs via state atom, incrementing the payload within a second |
+
 ---
 ## Roadmap
 
 - [x] **UUID v4** — Generation, validation, encode/decode round-trip
 - [x] **ULID** — Generation, validation, timestamp extraction, encode/decode, `next-ulid`, monotonic generation
 - [x] **UUIDv7** — Time-ordered UUIDs (RFC 9562): generation, validation, timestamp extraction, encode/decode, monotonic generation
-- [ ] **KSUID** — K-Sortable Unique Identifier
+- [x] **KSUID** — K-Sortable Unique Identifier: generation, validation, timestamp extraction, encode/decode, `next-ksuid`, monotonic generation
 - [ ] **NanoID** — Compact, URL-safe, customizable-length IDs
 - [ ] **HashID** — Reversible, salt-based ID obfuscation
 - [ ] **CUID2** — Secure, collision-resistant IDs for horizontal scaling

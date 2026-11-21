@@ -25,7 +25,7 @@
 (def basis (b/create-basis {:project "deps.edn"}))
 
 (defn- pom-template [v]
-  [[:description "A lightweight, zero-dependency Clojure toolkit for generating and parsing unique identifiers (ULID, UUID v4, UUIDv7, and more)."]
+  [[:description "A lightweight, zero-dependency Clojure toolkit for generating and parsing unique identifiers (ULID, UUID v4, UUIDv7, KSUID, and more)."]
    [:url "https://github.com/tuliogrodrigues/identika"]
    [:licenses
     [:license
