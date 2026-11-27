@@ -14,15 +14,28 @@
     CLOJARS_PASSWORD=<deploy-token> \\
     clojure -T:build deploy
 
-  Version is read from PROJECT_VERSION env var, or defaults to \"0.2.0\"."
+  Version is read from the PROJECT_VERSION env var or an explicit
+  :project-version option, e.g.:
+
+    PROJECT_VERSION=$(git describe --tags --abbrev=0 --match 'v*' | sed 's/^v//') \\
+    clojure -T:build jar"
   (:require [clojure.java.io :as io]
             [clojure.tools.build.api :as b]
             [deps-deploy.deps-deploy :as dd]))
 
 (def lib 'org.clojars.rodriguesgot/identika)
-(def version (or (System/getenv "PROJECT_VERSION") "0.2.0"))
 (def class-dir "target/classes")
 (def basis (b/create-basis {:project "deps.edn"}))
+
+(defn- resolve-version
+  "Resolve the project version from an explicit :project-version option or the
+  PROJECT_VERSION environment variable."
+  [project-version]
+  (or project-version
+      (System/getenv "PROJECT_VERSION")
+      (throw (ex-info (str "Project version is not set. Set the PROJECT_VERSION "
+                           "environment variable or pass :project-version.")
+                      {:env "PROJECT_VERSION"}))))
 
 (defn- pom-template [v]
   [[:description "A lightweight, zero-dependency Clojure toolkit for generating and parsing unique identifiers (ULID, UUID v4, UUIDv7, KSUID, and more)."]
@@ -48,8 +61,8 @@
 
 (defn jar
   "Build the library JAR: clean, write pom.xml, copy sources, create jar."
-  [{:keys [project-version] :or {project-version version}}]
-  (let [v (or project-version version)
+  [{:keys [project-version]}]
+  (let [v (resolve-version project-version)
         jar-file (format "target/%s-%s.jar" (name lib) v)]
     (clean nil)
     (println "\n── Writing pom.xml ──")
@@ -75,8 +88,8 @@
 
 (defn install
   "Install the JAR to the local Maven repository (~/.m2/repository)."
-  [{:keys [project-version] :or {project-version version}}]
-  (let [v (or project-version version)]
+  [{:keys [project-version]}]
+  (let [v (resolve-version project-version)]
     (println (format "Installing %s %s to local Maven repo..." lib v))
     (b/install {:basis basis
                 :lib lib
@@ -99,7 +112,7 @@
                            "CLOJARS_USERNAME and CLOJARS_PASSWORD.")
                       {:env env}))))
   (jar opts)
-  (let [v (or (:project-version opts) version)]
+  (let [v (resolve-version (:project-version opts))]
     (println (format "\n── Deploying %s %s to Clojars ──" lib v))
     (dd/deploy {:installer :remote
                 :artifact (format "target/%s-%s.jar" (name lib) v)
